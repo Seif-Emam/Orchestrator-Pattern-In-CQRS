@@ -1,0 +1,15 @@
+## Ignore Visual Studio / .NET Core temporary files and build outputs
+[Bb]in/
+[Oo]bj/
+*.user
+*.userosscache
+*.sln.docstates
+.vscode/
+.idea/
+*.suo
+*.userprefs
+TestResults/
+.vs/
+*.db
+*.db-shm
+*.db-wal
