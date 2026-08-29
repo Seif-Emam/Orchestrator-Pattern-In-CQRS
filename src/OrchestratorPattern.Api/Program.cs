@@ -2,13 +2,14 @@ using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
-
 using OrchestratorPattern.Api.Common.Behaviors;
 using OrchestratorPattern.Api.Common.Middleware;
 using OrchestratorPattern.Api.Common.Persistence;
 using OrchestratorPattern.Api.Common.Persistence.Seed;
 using OrchestratorPattern.Api.Features.Inventory;
 using OrchestratorPattern.Api.Features.Orders;
+using OrchestratorPattern.Api.Features.Orders.Commands.Checkout.Orchestration;
+using OrchestratorPattern.Api.Features.Orders.Commands.Checkout.Orchestration.Steps;
 using OrchestratorPattern.Api.Features.Payments;
 using OrchestratorPattern.Api.Features.Shipping;
 
@@ -41,6 +42,14 @@ builder.Services.AddMediatR(cfg =>
 // FluentValidation
 builder.Services.AddValidatorsFromAssembly(typeof(Program).Assembly);
 
+// Checkout Orchestrator & Workflow Step Services
+builder.Services.AddScoped<ICheckoutOrchestrator, CheckoutOrchestrator>();
+builder.Services.AddScoped<IOrderValidationStep, OrderValidationStep>();
+builder.Services.AddScoped<IInventoryReservationStep, InventoryReservationStep>();
+builder.Services.AddScoped<IPaymentProcessingStep, PaymentProcessingStep>();
+builder.Services.AddScoped<IShipmentCreationStep, ShipmentCreationStep>();
+builder.Services.AddScoped<IFinalizeCheckoutStep, FinalizeCheckoutStep>();
+
 // Centralized Error Handling & ProblemDetails (RFC 7807)
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
@@ -51,9 +60,9 @@ builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo
     {
-        Title = "E-Commerce Checkout API (Baseline - Without Orchestrator)",
+        Title = "E-Commerce Checkout API (With Orchestrator Pattern)",
         Version = "v1",
-        Description = "Production-quality CQRS with Vertical Slice Architecture demonstrating the baseline Checkout flow before introducing the Orchestrator Pattern."
+        Description = "Production-quality CQRS with Vertical Slice Architecture demonstrating the Orchestrator Pattern for multi-step Checkout workflows with explicit compensation."
     });
 });
 
