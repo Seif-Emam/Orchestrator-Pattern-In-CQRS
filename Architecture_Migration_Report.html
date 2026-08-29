@@ -1,0 +1,1926 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Checkout Workflow Architecture Migration Report | Engineering Review</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-primary: #0a0e17;
+            --bg-secondary: #111827;
+            --bg-tertiary: #1f2937;
+            --bg-card: rgba(17, 24, 39, 0.85);
+            --bg-glass: rgba(31, 41, 55, 0.6);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --border-focus: rgba(56, 189, 248, 0.4);
+            
+            --text-main: #f3f4f6;
+            --text-secondary: #9ca3af;
+            --text-muted: #6b7280;
+            
+            --accent-cyan: #38bdf8;
+            --accent-indigo: #6366f1;
+            --accent-purple: #a855f7;
+            --accent-emerald: #10b981;
+            --accent-rose: #f43f5e;
+            --accent-amber: #f59e0b;
+            
+            --font-ar: 'Tajawal', sans-serif;
+            --font-en: 'Plus Jakarta Sans', sans-serif;
+            --font-mono: 'Fira Code', monospace;
+            
+            --sidebar-width: 280px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-main);
+            font-family: var(--font-ar);
+            line-height: 1.8;
+            font-size: 16px;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 15% 10%, rgba(56, 189, 248, 0.04) 0%, transparent 40%),
+                radial-gradient(circle at 85% 60%, rgba(99, 102, 241, 0.04) 0%, transparent 40%),
+                radial-gradient(circle at 50% 90%, rgba(168, 85, 247, 0.03) 0%, transparent 50%);
+            background-attachment: fixed;
+        }
+
+        /* Top Reading Progress Bar */
+        #progress-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: transparent;
+            z-index: 1000;
+        }
+        #progress-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--accent-cyan), var(--accent-indigo), var(--accent-purple));
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+            transition: width 0.1s ease;
+        }
+
+        /* Layout Structure */
+        .app-wrapper {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar Navigation */
+        .sidebar {
+            width: var(--sidebar-width);
+            background: rgba(11, 15, 25, 0.95);
+            backdrop-filter: blur(12px);
+            border-left: 1px solid var(--border-color);
+            position: fixed;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            height: 100vh;
+            overflow-y: auto;
+            padding: 2rem 1.25rem;
+            z-index: 90;
+            scrollbar-width: thin;
+            scrollbar-color: var(--bg-tertiary) transparent;
+        }
+
+        .sidebar-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 2rem;
+            padding-bottom: 1.25rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .sidebar-logo-icon {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-indigo));
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-weight: 800;
+            font-family: var(--font-en);
+            font-size: 1.1rem;
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.3);
+        }
+
+        .sidebar-title {
+            font-family: var(--font-en);
+            font-size: 1rem;
+            font-weight: 700;
+            color: #fff;
+            letter-spacing: -0.02em;
+        }
+
+        .sidebar-subtitle {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-family: var(--font-en);
+            display: block;
+        }
+
+        .nav-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+
+        .nav-item a {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.6rem 0.85rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .nav-item a:hover {
+            color: var(--accent-cyan);
+            background: rgba(56, 189, 248, 0.08);
+            transform: translateX(-3px);
+        }
+
+        .nav-item.active a {
+            color: #fff;
+            background: linear-gradient(90deg, rgba(56, 189, 248, 0.15), rgba(99, 102, 241, 0.15));
+            border-right: 3px solid var(--accent-cyan);
+            font-weight: 700;
+        }
+
+        .nav-num {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--accent-cyan);
+            opacity: 0.8;
+        }
+
+        /* Main Content Container */
+        .main-content {
+            margin-right: var(--sidebar-width);
+            flex: 1;
+            padding: 3rem 4rem;
+            max-width: calc(100vw - var(--sidebar-width));
+        }
+
+        /* Common Container & Section styling */
+        section {
+            margin-bottom: 5rem;
+            scroll-margin-top: 2rem;
+        }
+
+        .section-header {
+            margin-bottom: 2rem;
+            position: relative;
+        }
+
+        .section-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            color: var(--accent-cyan);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            background: rgba(56, 189, 248, 0.1);
+            border: 1px solid rgba(56, 189, 248, 0.2);
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            margin-bottom: 0.75rem;
+        }
+
+        .section-title {
+            font-size: 2rem;
+            font-weight: 800;
+            color: #fff;
+            letter-spacing: -0.02em;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .section-desc {
+            color: var(--text-secondary);
+            font-size: 1.05rem;
+            margin-top: 0.5rem;
+            max-width: 900px;
+        }
+
+        /* Typography Helpers */
+        .en-term {
+            font-family: var(--font-en);
+            color: var(--accent-cyan);
+            direction: ltr;
+            display: inline-block;
+            font-weight: 600;
+        }
+
+        .code-term {
+            font-family: var(--font-mono);
+            background: rgba(255, 255, 255, 0.08);
+            color: #e2e8f0;
+            padding: 0.15rem 0.45rem;
+            border-radius: 5px;
+            font-size: 0.9em;
+            direction: ltr;
+            display: inline-block;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* Glassmorphism Cards */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 2rem;
+            backdrop-filter: blur(12px);
+            transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card:hover {
+            border-color: rgba(56, 189, 248, 0.3);
+            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5), 0 0 15px rgba(56, 189, 248, 0.05);
+        }
+
+        .card-header-clean {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        /* Hero Section Styling */
+        .hero-card {
+            background: linear-gradient(135deg, rgba(17, 24, 39, 0.95), rgba(30, 41, 59, 0.7));
+            border: 1px solid rgba(56, 189, 248, 0.2);
+            box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.7), 0 0 30px rgba(56, 189, 248, 0.08);
+            padding: 3.5rem 3rem;
+            border-radius: 24px;
+            margin-bottom: 3rem;
+        }
+
+        .hero-badge-row {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .hero-branch-badge {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            padding: 0.4rem 1rem;
+            border-radius: 8px;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.6rem;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--border-color);
+        }
+
+        .hero-title {
+            font-size: 2.75rem;
+            font-weight: 900;
+            line-height: 1.25;
+            color: #fff;
+            margin-bottom: 0.75rem;
+            letter-spacing: -0.03em;
+        }
+
+        .hero-title-gradient {
+            background: linear-gradient(135deg, #fff 30%, var(--accent-cyan) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero-subtitle {
+            font-family: var(--font-en);
+            font-size: 1.35rem;
+            color: var(--accent-cyan);
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            letter-spacing: -0.01em;
+        }
+
+        .hero-desc {
+            font-size: 1.15rem;
+            color: var(--text-secondary);
+            line-height: 1.9;
+            max-width: 950px;
+            margin-bottom: 2.5rem;
+        }
+
+        .hero-metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1.25rem;
+        }
+
+        .metric-box {
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            padding: 1.25rem;
+            text-align: center;
+            transition: all 0.2s ease;
+        }
+
+        .metric-box:hover {
+            border-color: var(--accent-cyan);
+            transform: translateY(-2px);
+        }
+
+        .metric-value {
+            font-family: var(--font-en);
+            font-size: 1.85rem;
+            font-weight: 800;
+            color: #fff;
+            margin-bottom: 0.25rem;
+        }
+
+        .metric-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        /* Before vs After Side by Side */
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+
+        .before-card {
+            border-top: 4px solid var(--accent-rose);
+            background: linear-gradient(180deg, rgba(244, 63, 94, 0.04) 0%, var(--bg-card) 100%);
+        }
+
+        .after-card {
+            border-top: 4px solid var(--accent-emerald);
+            background: linear-gradient(180deg, rgba(16, 185, 129, 0.04) 0%, var(--bg-card) 100%);
+        }
+
+        .workflow-diagram-box {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            font-family: var(--font-mono);
+            direction: ltr;
+        }
+
+        .diagram-node {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            font-size: 0.88rem;
+            font-weight: 600;
+            text-align: center;
+            border: 1px solid transparent;
+            transition: transform 0.2s ease;
+        }
+
+        .diagram-node:hover {
+            transform: scale(1.02);
+        }
+
+        .node-api { background: #1e293b; color: #94a3b8; border-color: #334155; }
+        .node-command { background: #1e1b4b; color: #a5b4fc; border-color: #312e81; }
+        .node-handler-heavy { background: #4c0519; color: #fecdd3; border-color: #9f1239; }
+        .node-handler-thin { background: #064e3b; color: #a7f3d0; border-color: #047857; }
+        .node-orchestrator { background: #3b0764; color: #e9d5ff; border-color: #7e22ce; box-shadow: 0 0 15px rgba(168, 85, 247, 0.2); }
+        .node-step { background: #0f172a; color: #38bdf8; border-color: #0284c7; }
+        .node-comp { background: #2e1065; color: #f472b6; border-color: #831843; }
+
+        .diagram-arrow {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 1rem;
+            margin: 0.2rem 0;
+        }
+
+        /* Matrix Table */
+        .matrix-table-container {
+            overflow-x: auto;
+            border-radius: 14px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-card);
+        }
+
+        .matrix-table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: right;
+        }
+
+        .matrix-table th {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 1.25rem 1.5rem;
+            font-weight: 700;
+            color: #fff;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.95rem;
+        }
+
+        .matrix-table td {
+            padding: 1.15rem 1.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            color: var(--text-secondary);
+            font-size: 0.92rem;
+        }
+
+        .matrix-table tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.3rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            font-family: var(--font-en);
+            text-transform: uppercase;
+        }
+
+        .badge-red { background: rgba(244, 63, 94, 0.15); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.3); }
+        .badge-green { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+        .badge-blue { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); }
+        .badge-amber { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+
+        /* Problem Cards Grid */
+        .problems-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .problem-card {
+            border-right: 4px solid var(--accent-rose);
+        }
+
+        .problem-num {
+            font-family: var(--font-mono);
+            color: var(--accent-rose);
+            font-weight: 800;
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Step Cards */
+        .steps-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .step-card {
+            display: grid;
+            grid-template-columns: 80px 1fr;
+            gap: 1.5rem;
+            align-items: start;
+            border-right: 4px solid var(--accent-cyan);
+            background: linear-gradient(90deg, var(--bg-card) 0%, rgba(56, 189, 248, 0.03) 100%);
+        }
+
+        .step-num-badge {
+            width: 70px;
+            height: 70px;
+            border-radius: 14px;
+            background: rgba(56, 189, 248, 0.1);
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: var(--font-mono);
+            color: var(--accent-cyan);
+        }
+
+        .step-num-badge .step-label {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .step-num-badge .step-digits {
+            font-size: 1.5rem;
+            font-weight: 800;
+            line-height: 1;
+        }
+
+        /* Interactive Failure Simulator */
+        .simulator-box {
+            background: #0d1322;
+            border: 1px solid rgba(56, 189, 248, 0.25);
+            border-radius: 18px;
+            padding: 2rem;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5);
+        }
+
+        .sim-btn-group {
+            display: flex;
+            gap: 0.75rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .sim-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 0.65rem 1.25rem;
+            border-radius: 10px;
+            font-family: var(--font-en);
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .sim-btn:hover {
+            background: rgba(56, 189, 248, 0.15);
+            border-color: var(--accent-cyan);
+            color: #fff;
+        }
+
+        .sim-btn.active {
+            background: var(--accent-cyan);
+            color: #000;
+            border-color: var(--accent-cyan);
+            font-weight: 700;
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.4);
+        }
+
+        .sim-output-container {
+            background: #060911;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            direction: ltr;
+            font-family: var(--font-mono);
+            min-height: 200px;
+        }
+
+        /* Code Snippet Box */
+        .code-box {
+            background: #080c14;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            overflow: hidden;
+            margin: 1.5rem 0;
+            direction: ltr;
+        }
+
+        .code-header {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 0.75rem 1.25rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border-color);
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .code-content {
+            padding: 1.25rem;
+            font-family: var(--font-mono);
+            font-size: 0.88rem;
+            line-height: 1.6;
+            color: #e2e8f0;
+            overflow-x: auto;
+        }
+
+        /* Developer Experience Panel */
+        .devex-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+
+        .devex-card {
+            border-radius: 14px;
+            padding: 1.75rem;
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid var(--border-color);
+        }
+
+        .devex-question {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Checklists */
+        .checklist-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1rem;
+        }
+
+        .checklist-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid var(--border-color);
+            padding: 1rem 1.25rem;
+            border-radius: 10px;
+            font-weight: 600;
+        }
+
+        .check-icon {
+            color: var(--accent-emerald);
+            font-size: 1.2rem;
+            font-weight: 900;
+        }
+
+        /* Git Timeline */
+        .git-timeline {
+            position: relative;
+            padding-right: 2rem;
+            border-right: 2px solid var(--border-color);
+            margin-right: 1rem;
+        }
+
+        .timeline-node {
+            position: relative;
+            margin-bottom: 2rem;
+        }
+
+        .timeline-dot {
+            position: absolute;
+            right: -2.6rem;
+            top: 0.2rem;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--accent-cyan);
+            border: 3px solid var(--bg-primary);
+            box-shadow: 0 0 10px var(--accent-cyan);
+        }
+
+        .timeline-content {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            padding: 1.25rem 1.5rem;
+            border-radius: 12px;
+        }
+
+        /* Footer */
+        footer {
+            border-top: 1px solid var(--border-color);
+            padding: 3rem 0;
+            margin-top: 5rem;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .sidebar { display: none; }
+            .main-content { margin-right: 0; padding: 2rem; max-width: 100vw; }
+            .comparison-grid, .devex-grid { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 640px) {
+            .hero-title { font-size: 2rem; }
+            .hero-card { padding: 2rem 1.5rem; }
+            .step-card { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Reading Progress Bar -->
+    <div id="progress-container">
+        <div id="progress-bar"></div>
+    </div>
+
+    <div class="app-wrapper">
+
+        <!-- Sticky Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <div class="sidebar-logo-icon">OP</div>
+                <div>
+                    <div class="sidebar-title">Architecture Report</div>
+                    <span class="sidebar-subtitle">CQRS & Orchestrator</span>
+                </div>
+            </div>
+
+            <ul class="nav-list">
+                <li class="nav-item active"><a href="#hero"><span class="nav-num">01</span> Executive Header</a></li>
+                <li class="nav-item"><a href="#executive-summary"><span class="nav-num">02</span> Executive Summary</a></li>
+                <li class="nav-item"><a href="#before-after"><span class="nav-num">03</span> Before vs After</a></li>
+                <li class="nav-item"><a href="#matrix"><span class="nav-num">04</span> Comparison Matrix</a></li>
+                <li class="nav-item"><a href="#problems"><span class="nav-num">05</span> Architectural Problems</a></li>
+                <li class="nav-item"><a href="#orchestrator-arch"><span class="nav-num">06</span> Target Architecture</a></li>
+                <li class="nav-item"><a href="#workflow-steps"><span class="nav-num">07</span> Workflow Steps</a></li>
+                <li class="nav-item"><a href="#reverse-compensation"><span class="nav-num">08</span> Reverse Compensation</a></li>
+                <li class="nav-item"><a href="#failure-scenarios"><span class="nav-num">09</span> Failure Scenarios</a></li>
+                <li class="nav-item"><a href="#workflow-context"><span class="nav-num">10</span> Workflow Context</a></li>
+                <li class="nav-item"><a href="#thin-handler"><span class="nav-num">11</span> Thin Command Handler</a></li>
+                <li class="nav-item"><a href="#testing"><span class="nav-num">12</span> Testing Dashboard</a></li>
+                <li class="nav-item"><a href="#coverage-map"><span class="nav-num">13</span> Test Coverage Map</a></li>
+                <li class="nav-item"><a href="#unchanged"><span class="nav-num">14</span> What Stayed Unchanged</a></li>
+                <li class="nav-item"><a href="#git-strategy"><span class="nav-num">15</span> Git Timeline & Commits</a></li>
+                <li class="nav-item"><a href="#engineering-impact"><span class="nav-num">16</span> Engineering Impact</a></li>
+                <li class="nav-item"><a href="#devex"><span class="nav-num">17</span> Developer Experience</a></li>
+                <li class="nav-item"><a href="#decision-summary"><span class="nav-num">18</span> Architecture Decision</a></li>
+                <li class="nav-item"><a href="#final-summary"><span class="nav-num">19</span> Final Summary</a></li>
+            </ul>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+
+            <!-- SECTION 01 — Hero / Executive Header -->
+            <section id="hero">
+                <div class="hero-card">
+                    <div class="hero-badge-row">
+                        <div class="hero-branch-badge">
+                            <span style="color: var(--accent-rose);">● before-orchestrator-pattern</span>
+                            <span style="color: var(--text-muted);">➔</span>
+                            <span style="color: var(--accent-emerald);">● after-orchestrator-pattern</span>
+                        </div>
+                        <span class="badge badge-blue">Production Engineering Report</span>
+                        <span class="badge badge-green">Migration Verified (100% Tests Pass)</span>
+                    </div>
+
+                    <h1 class="hero-title">
+                        Checkout Workflow <span class="hero-title-gradient">Architecture Migration</span>
+                    </h1>
+                    <div class="hero-subtitle">
+                        From Direct Command Chaining to the Orchestrator Pattern
+                    </div>
+
+                    <p class="hero-desc">
+                        تقرير معماري شامل يوضح تفاصيل نقل وتطوير الـ <span class="en-term">Order Checkout Workflow</span> في نظام الـ E-Commerce من <span class="en-term">Monolithic Command Handler</span> بيعمل <span class="en-term">Direct Command Chaining</span> وبيشيل كل الـ responsibilities، لـ <span class="en-term">Orchestrator-based Architecture</span> بتعتمد على <span class="en-term">Focused Steps</span> مع <span class="en-term">Explicit Reverse Compensation</span> وإدارة واضحة للـ Workflow State.
+                    </p>
+
+                    <div class="hero-metrics-grid">
+                        <div class="metric-box">
+                            <div class="metric-value" style="color: var(--accent-cyan);">Orchestrator</div>
+                            <div class="metric-label">Pattern Implemented</div>
+                        </div>
+                        <div class="metric-box">
+                            <div class="metric-value">.NET 9.0</div>
+                            <div class="metric-label">ASP.NET Core LTS</div>
+                        </div>
+                        <div class="metric-box">
+                            <div class="metric-value">Vertical Slice</div>
+                            <div class="metric-label">+ CQRS Architecture</div>
+                        </div>
+                        <div class="metric-box">
+                            <div class="metric-value" style="color: var(--accent-emerald);">46 / 46</div>
+                            <div class="metric-label">Tests Passed (100%)</div>
+                        </div>
+                        <div class="metric-box">
+                            <div class="metric-value" style="color: var(--accent-purple);">~0.7s</div>
+                            <div class="metric-label">Test Suite Runtime</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 02 — Executive Summary -->
+            <section id="executive-summary">
+                <div class="section-header">
+                    <span class="section-tag">Section 02 // Overview</span>
+                    <h2 class="section-title">Executive Summary</h2>
+                    <p class="section-desc">ملخص تنفيذي يوضح الدوافع المعمارية للـ Migration، ما تم تغييره، وما تم الحفاظ عليه بدقة.</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-header-clean">
+                        <h3 class="card-title">Scope & Architectural Objective</h3>
+                        <span class="badge badge-green">Zero-Regression Migration</span>
+                    </div>
+
+                    <p style="font-size: 1.1rem; line-height: 1.9; color: var(--text-main); margin-bottom: 1.5rem;">
+                        الـ Checkout Workflow بيمثل Business Transaction معقدة بتمر بـ 5 خطوات متتالية عبر Bounded Contexts مختلفة: <span class="en-term">Order Validation</span>، <span class="en-term">Inventory Reservation</span>، <span class="en-term">Payment Processing</span>، <span class="en-term">Shipment Creation</span>، و <span class="en-term">Order Confirmation</span>.
+                    </p>
+
+                    <div style="background: rgba(0, 0, 0, 0.3); border-right: 4px solid var(--accent-cyan); padding: 1.25rem 1.5rem; border-radius: 8px; margin-bottom: 2rem;">
+                        <p style="font-size: 1.05rem; color: #e0f2fe; margin: 0;">
+                            <strong>قاعدة أساسية في الـ Migration:</strong> الـ Migration غيرت الـ Architecture Organization والـ Workflow Coordination، لكن <strong>حافظت بنسبة 100%</strong> على الـ existing <span class="en-term">API contracts</span>، الـ <span class="en-term">Domain Entities</span>، الـ <span class="en-term">Database Persistence</span>، الـ <span class="en-term">Standardized JSON Responses</span>، والـ <span class="en-term">Centralized Error Handling</span> بدون أي Regression في الـ Business Behavior.
+                        </p>
+                    </div>
+
+                    <div class="hero-metrics-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+                        <div class="metric-box" style="text-align: right;">
+                            <div style="color: var(--accent-rose); font-weight: 700; margin-bottom: 0.25rem;">Before Problem</div>
+                            <div style="font-size: 0.9rem; color: var(--text-secondary);">Handler كان شايل كل الـ steps والـ rollback المعقد يدويًا.</div>
+                        </div>
+                        <div class="metric-box" style="text-align: right;">
+                            <div style="color: var(--accent-emerald); font-weight: 700; margin-bottom: 0.25rem;">After Solution</div>
+                            <div style="font-size: 0.9rem; color: var(--text-secondary);">Orchestrator مخصص بينسق الـ Steps وينفذ Reverse Compensation.</div>
+                        </div>
+                        <div class="metric-box" style="text-align: right;">
+                            <div style="color: var(--accent-cyan); font-weight: 700; margin-bottom: 0.25rem;">Handler Impact</div>
+                            <div style="font-size: 0.9rem; color: var(--text-secondary);">تحول لـ Thin Delegator مكون من 15 سطر فقط.</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 03 — Before vs After Architecture -->
+            <section id="before-after">
+                <div class="section-header">
+                    <span class="section-tag">Section 03 // Deep Dive</span>
+                    <h2 class="section-title">Before vs. After Architecture</h2>
+                    <p class="section-desc">مقارنة بصرية توضح التحول الجذري في مسار تنفيذ الـ Checkout Command وتوزيع المسؤوليات.</p>
+                </div>
+
+                <div class="comparison-grid">
+                    <!-- BEFORE CARD -->
+                    <div class="card before-card">
+                        <div class="card-header-clean">
+                            <div>
+                                <h3 class="card-title" style="color: var(--accent-rose);">BEFORE Architecture</h3>
+                                <span style="font-size: 0.8rem; color: var(--text-muted); font-family: var(--font-mono);">branch: before-orchestrator-pattern</span>
+                            </div>
+                            <span class="badge badge-red">Monolithic Handler</span>
+                        </div>
+
+                        <p style="color: var(--text-secondary); font-size: 0.95rem;">
+                            المشكلة الأساسية إن الـ <span class="code-term">CheckoutCommandHandler</span> كان Monolithic وشايل كل مسؤوليات الـ Checkout مجتمعة جواه، وبيعمل Chaining مباشر لأوامر MediatR مع Nested Catch Blocks للـ Rollback.
+                        </p>
+
+                        <div class="workflow-diagram-box">
+                            <div class="diagram-node node-api">POST /api/orders/{id}/checkout</div>
+                            <div class="diagram-arrow">↓</div>
+                            <div class="diagram-node node-command">CheckoutCommand</div>
+                            <div class="diagram-arrow">↓</div>
+                            <div class="diagram-node node-handler-heavy">
+                                <strong>CheckoutCommandHandler (180+ Lines)</strong><br>
+                                <span style="font-size: 0.75rem; opacity: 0.8;">[Heavy Coordination + Manual Rollback]</span>
+                            </div>
+                            <div class="diagram-arrow">↓ Direct In-Handler Calls</div>
+                            <div class="diagram-node node-api">Step 1: Validate Order (Inline Entity Query)</div>
+                            <div class="diagram-arrow">↓</div>
+                            <div class="diagram-node node-api">Step 2: ReserveInventoryCommand (MediatR)</div>
+                            <div class="diagram-arrow">↓</div>
+                            <div class="diagram-node node-api">Step 3: ProcessPaymentCommand (MediatR)</div>
+                            <div class="diagram-arrow">↓</div>
+                            <div class="diagram-node node-api">Step 4: CreateShipmentCommand (MediatR)</div>
+                            <div class="diagram-arrow">↓</div>
+                            <div class="diagram-node node-api">Step 5: Finalize Order (Inline Status = Confirmed)</div>
+                            <div class="diagram-arrow">↓ On Exception</div>
+                            <div class="diagram-node node-comp">Manual Catch Block Rollback (Stock + Refund)</div>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 1rem;">
+                            <div style="background: rgba(0,0,0,0.3); padding: 0.75rem; border-radius: 8px; border-right: 3px solid var(--accent-rose);">
+                                <div style="font-size: 0.75rem; color: var(--text-muted);">Handler Size</div>
+                                <div style="font-size: 1.2rem; font-weight: 800; color: #fff; font-family: var(--font-en);">180+ lines</div>
+                            </div>
+                            <div style="background: rgba(0,0,0,0.3); padding: 0.75rem; border-radius: 8px; border-right: 3px solid var(--accent-rose);">
+                                <div style="font-size: 0.75rem; color: var(--text-muted);">Responsibilities</div>
+                                <div style="font-size: 1.2rem; font-weight: 800; color: #fff; font-family: var(--font-en);">6+ Concerns</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- AFTER CARD -->
+                    <div class="card after-card">
+                        <div class="card-header-clean">
+                            <div>
+                                <h3 class="card-title" style="color: var(--accent-emerald);">AFTER Architecture</h3>
+                                <span style="font-size: 0.8rem; color: var(--text-muted); font-family: var(--font-mono);">branch: after-orchestrator-pattern</span>
+                            </div>
+                            <span class="badge badge-green">Orchestrator Pattern</span>
+                        </div>
+
+                        <p style="color: var(--text-secondary); font-size: 0.95rem;">
+                            دلوقتي الـ <span class="code-term">CheckoutCommandHandler</span> دوره بسيط جدًا: يستقبل الـ Command ويفوض التنفيذ للـ <span class="en-term">CheckoutOrchestrator</span> اللي بينسق الـ Steps المستقلة ويدير الـ Reverse Compensation بشكل آلي واحترافي.
+                        </p>
+
+                        <div class="workflow-diagram-box">
+                            <div class="diagram-node node-api">POST /api/orders/{id}/checkout</div>
+                            <div class="diagram-arrow">↓</div>
+                            <div class="diagram-node node-command">CheckoutCommand</div>
+                            <div class="diagram-arrow">↓</div>
+                            <div class="diagram-node node-handler-thin">
+                                <strong>CheckoutCommandHandler (~15 Lines)</strong><br>
+                                <span style="font-size: 0.75rem; opacity: 0.8;">[Thin Delegator]</span>
+                            </div>
+                            <div class="diagram-arrow">↓ Delegates to</div>
+                            <div class="diagram-node node-orchestrator">
+                                <strong>CheckoutOrchestrator</strong><br>
+                                <span style="font-size: 0.75rem; opacity: 0.8;">[Workflow Coordinator & State Manager]</span>
+                            </div>
+                            <div class="diagram-arrow">↓ Pipeline Execution via Context</div>
+                            <div class="diagram-node node-step">01: OrderValidationStep</div>
+                            <div class="diagram-arrow">↓</div>
+                            <div class="diagram-node node-step">02: InventoryReservationStep (Compensable)</div>
+                            <div class="diagram-arrow">↓</div>
+                            <div class="diagram-node node-step">03: PaymentProcessingStep (Compensable)</div>
+                            <div class="diagram-arrow">↓</div>
+                            <div class="diagram-node node-step">04: ShipmentCreationStep</div>
+                            <div class="diagram-arrow">↓</div>
+                            <div class="diagram-node node-step">05: FinalizeCheckoutStep</div>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 1rem;">
+                            <div style="background: rgba(0,0,0,0.3); padding: 0.75rem; border-radius: 8px; border-right: 3px solid var(--accent-emerald);">
+                                <div style="font-size: 0.75rem; color: var(--text-muted);">Handler Size</div>
+                                <div style="font-size: 1.2rem; font-weight: 800; color: var(--accent-emerald); font-family: var(--font-en);">~15 lines</div>
+                            </div>
+                            <div style="background: rgba(0,0,0,0.3); padding: 0.75rem; border-radius: 8px; border-right: 3px solid var(--accent-emerald);">
+                                <div style="font-size: 0.75rem; color: var(--text-muted);">Step Modularity</div>
+                                <div style="font-size: 1.2rem; font-weight: 800; color: var(--accent-cyan); font-family: var(--font-en);">5 Discrete Steps</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 04 — Architecture Comparison Matrix -->
+            <section id="matrix">
+                <div class="section-header">
+                    <span class="section-tag">Section 04 // Evaluation Matrix</span>
+                    <h2 class="section-title">Architecture Comparison Matrix</h2>
+                    <p class="section-desc">مصفوفة هندسية مفصلة توضح الفروق المعمارية ومستوى التحسين عبر كل محور من محاور النظام.</p>
+                </div>
+
+                <div class="matrix-table-container">
+                    <table class="matrix-table">
+                        <thead>
+                            <tr>
+                                <th>Area / Architectural Attribute</th>
+                                <th>Before (`before-orchestrator-pattern`)</th>
+                                <th>After (`after-orchestrator-pattern`)</th>
+                                <th>Engineering Impact</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Command Handler Size</strong></td>
+                                <td><span class="en-term">180+ lines</span> (Monolithic Handler)</td>
+                                <td><span class="en-term">~15 lines</span> (Thin Delegator)</td>
+                                <td><span class="badge badge-green">Significant Improvement</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Business Workflow Coordination</strong></td>
+                                <td>كود متداخل مبعثر داخل الـ Handler</td>
+                                <td>منسق مركزي مخصص <span class="code-term">CheckoutOrchestrator</span></td>
+                                <td><span class="badge badge-green">Significant Improvement</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Responsibility Distribution</strong></td>
+                                <td>مجمع في مكان واحد (SRP Violation)</td>
+                                <td>مقسم لـ 5 <span class="en-term">Focused Steps</span> مستقلة</td>
+                                <td><span class="badge badge-green">Significant Improvement</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Error Handling</strong></td>
+                                <td>Nested <span class="code-term">try/catch</span> داخل الـ Handler</td>
+                                <td>تدفق طبيعي للـ <span class="en-term">Global Exception Handler</span></td>
+                                <td><span class="badge badge-blue">Improved</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Compensation / Rollback</strong></td>
+                                <td>كود يدوي مشروط ومعقد بالـ Catch block</td>
+                                <td><span class="en-term">Explicit Reverse Compensation</span> في كل Step</td>
+                                <td><span class="badge badge-green">Significant Improvement</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Unit Testability</strong></td>
+                                <td>صعبة جدًا وتتطلب Mocking لكل الـ MediatR calls معًا</td>
+                                <td>اختبار كل Step والـ Orchestrator في عزل تام</td>
+                                <td><span class="badge badge-green">Significant Improvement</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Maintainability & Code Readability</strong></td>
+                                <td>صعوبة متابعة تدفق الخطوات وتسلسل الـ State</td>
+                                <td>الـ Workflow واضح ومباشر بمجرد قراءة الـ Orchestrator</td>
+                                <td><span class="badge badge-green">Significant Improvement</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Coupling Between Domains</strong></td>
+                                <td><span class="en-term">High Tight Coupling</span> بين الـ Orders وباقي الـ Slices</td>
+                                <td><span class="en-term">Decoupled via Step Abstractions</span></td>
+                                <td><span class="badge badge-blue">Improved</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Extensibility (OCP)</strong></td>
+                                <td>إضافة أي خطوة تتطلب تعديل الـ Handler مباشرة</td>
+                                <td>إضافة Step جديدة في الـ Pipeline بدون كسر القائم</td>
+                                <td><span class="badge badge-green">Significant Improvement</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Separation of Concerns</strong></td>
+                                <td>منخفضة (Handler بيقوم بـ 6 أدوار)</td>
+                                <td>عالية جدًا وموزعة بامتياز حسب مبادئ SOLID</td>
+                                <td><span class="badge badge-green">Significant Improvement</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- SECTION 05 — Why The Old Design Became a Problem -->
+            <section id="problems">
+                <div class="section-header">
+                    <span class="section-tag">Section 05 // Root Cause Analysis</span>
+                    <h2 class="section-title">Why The Old Design Became a Problem</h2>
+                    <p class="section-desc">تحليل معماري للمشاكل والعيوب التصميمية التي أدت لضرورة الترحيل إلى الـ Orchestrator Pattern.</p>
+                </div>
+
+                <div class="problems-grid">
+                    <div class="card problem-card">
+                        <div class="problem-num">01. Monolithic Handler</div>
+                        <h4 style="color: #fff; font-size: 1.15rem; margin-bottom: 0.75rem;">تضخم حجم ومسؤوليات الـ Handler</h4>
+                        <p style="color: var(--text-secondary); font-size: 0.95rem;">
+                            الـ <span class="code-term">CheckoutCommandHandler</span> كان بيجمع <span class="en-term">Validation + Inventory + Payment + Shipment + Finalization + Compensation</span> في ملف واحد تجاوز 180 سطرًا، مما جعله God Handler عرضة للأخطاء عند أي تعديل.
+                        </p>
+                    </div>
+
+                    <div class="card problem-card">
+                        <div class="problem-num">02. Single Responsibility Violation</div>
+                        <h4 style="color: #fff; font-size: 1.15rem; margin-bottom: 0.75rem;">كسر مبدأ المسؤولية الواحدة (SRP)</h4>
+                        <p style="color: var(--text-secondary); font-size: 0.95rem;">
+                            الـ Handler كان عنده أسباب متعددة للتغيير: لو طريقة الـ Validation اتغيرت، أو الـ Payment Gateway اتغيرت، أو خطوات الـ Shipping اتغيرت، كل ده كان بيجبرنا نعدل في نفس الـ Handler.
+                        </p>
+                    </div>
+
+                    <div class="card problem-card">
+                        <div class="problem-num">03. Fragile Manual Compensation</div>
+                        <h4 style="color: #fff; font-size: 1.15rem; margin-bottom: 0.75rem;">هشاشة الـ Rollback اليدوي (Spaghetti Logic)</h4>
+                        <p style="color: var(--text-secondary); font-size: 0.95rem;">
+                            عملية معالجة الفشل كانت معتمدة على شروط متداخلة داخل الـ <span class="code-term">catch</span> block زي <span class="code-term">if (inventoryReserved)</span> و <span class="code-term">if (paymentProcessed)</span>، وده بيخلي التعويض معرض لنسيان خطوات أو حدوث State Inconsistency.
+                        </p>
+                    </div>
+
+                    <div class="card problem-card">
+                        <div class="problem-num">04. Tight Temporal Coupling</div>
+                        <h4 style="color: #fff; font-size: 1.15rem; margin-bottom: 0.75rem;">الارتباط الوثيق وصعوبة التوسع (OCP Violation)</h4>
+                        <p style="color: var(--text-secondary); font-size: 0.95rem;">
+                            لو البيزنس طلب إضافة خطوة جديدة في الـ Checkout (زي <span class="en-term">Fraud Check</span> أو <span class="en-term">Loyalty Points</span> أو <span class="en-term">Email Notification</span>)، كان لازم نفتح الـ Handler ونحشر الخطوة والـ Rollback بتاعها جواه.
+                        </p>
+                    </div>
+
+                    <div class="card problem-card">
+                        <div class="problem-num">05. Combinatorial Testing Pain</div>
+                        <h4 style="color: #fff; font-size: 1.15rem; margin-bottom: 0.75rem;">تعقيد الـ Unit Testing والـ Mocking</h4>
+                        <p style="color: var(--text-secondary); font-size: 0.95rem;">
+                            عشان تعمل Unit Test لسيناريو واحد في الـ Checkout، كنت محتاج تعمل Mocking لكل MediatR Command ولكل حالة نجاح وفشل وتتأكد من شروط الـ rollback في test fixture واحد ضخم.
+                        </p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 06 — New Orchestrator Architecture -->
+            <section id="orchestrator-arch">
+                <div class="section-header">
+                    <span class="section-tag">Section 06 // System Blueprint</span>
+                    <h2 class="section-title">New Orchestrator Architecture</h2>
+                    <p class="section-desc">المخطط المعماري الكامل للـ Target Architecture وكيفية تدفق البيانات عبر الـ Steps والـ Context.</p>
+                </div>
+
+                <div class="card">
+                    <div style="background: rgba(0, 0, 0, 0.5); border: 1px solid var(--border-color); border-radius: 16px; padding: 2.5rem; text-align: center;">
+                        <div style="display: inline-block; width: 100%; max-width: 900px; direction: ltr; font-family: var(--font-en);">
+                            
+                            <!-- API Top -->
+                            <div style="background: #1e293b; color: #94a3b8; border: 1px solid #334155; padding: 0.85rem 1.5rem; border-radius: 10px; font-weight: 700; display: inline-block; margin-bottom: 1rem;">
+                                Client / HTTP API Endpoint (POST /api/orders/{id}/checkout)
+                            </div>
+                            <div style="color: var(--text-muted); font-size: 1.2rem; margin-bottom: 0.5rem;">↓</div>
+
+                            <!-- Command & Handler -->
+                            <div style="display: flex; gap: 1rem; justify-content: center; margin-bottom: 1rem;">
+                                <div style="background: #1e1b4b; color: #a5b4fc; border: 1px solid #312e81; padding: 0.75rem 1.25rem; border-radius: 8px; font-weight: 600;">
+                                    CheckoutCommand
+                                </div>
+                                <div style="color: var(--text-muted); font-size: 1.2rem; align-self: center;">→</div>
+                                <div style="background: #064e3b; color: #a7f3d0; border: 1px solid #047857; padding: 0.75rem 1.25rem; border-radius: 8px; font-weight: 600;">
+                                    CheckoutCommandHandler (Thin Delegator)
+                                </div>
+                            </div>
+                            <div style="color: var(--text-muted); font-size: 1.2rem; margin-bottom: 0.5rem;">↓ invokes</div>
+
+                            <!-- Orchestrator Main Box -->
+                            <div style="background: linear-gradient(180deg, #2e1065 0%, #1e1b4b 100%); border: 2px solid var(--accent-purple); border-radius: 16px; padding: 2rem; box-shadow: 0 0 30px rgba(168, 85, 247, 0.2); margin-bottom: 1.5rem;">
+                                <div style="color: #f3e8ff; font-size: 1.35rem; font-weight: 800; margin-bottom: 0.5rem;">
+                                    ICheckoutOrchestrator / CheckoutOrchestrator
+                                </div>
+                                <div style="color: #c084fc; font-size: 0.85rem; font-family: var(--font-mono); margin-bottom: 1.5rem;">
+                                    [Coordinates Sequential Pipeline & Executes Reverse Compensation on Failure]
+                                </div>
+
+                                <!-- Shared Context -->
+                                <div style="background: rgba(0, 0, 0, 0.4); border: 1px dashed rgba(56, 189, 248, 0.4); border-radius: 10px; padding: 0.75rem 1rem; margin-bottom: 1.5rem; color: var(--accent-cyan); font-family: var(--font-mono); font-size: 0.85rem;">
+                                    Shared State: CheckoutWorkflowContext (Order, InventoryReservation, PaymentResult, ShipmentResult)
+                                </div>
+
+                                <!-- Pipeline Steps Grid -->
+                                <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.75rem;">
+                                    <div style="background: rgba(15, 23, 42, 0.8); border: 1px solid #0284c7; padding: 1rem 0.5rem; border-radius: 10px;">
+                                        <div style="color: var(--accent-cyan); font-size: 0.75rem; font-weight: 800;">STEP 01</div>
+                                        <div style="color: #fff; font-size: 0.82rem; font-weight: 700;">OrderValidation</div>
+                                    </div>
+                                    <div style="background: rgba(15, 23, 42, 0.8); border: 1px solid #0284c7; padding: 1rem 0.5rem; border-radius: 10px;">
+                                        <div style="color: var(--accent-cyan); font-size: 0.75rem; font-weight: 800;">STEP 02</div>
+                                        <div style="color: #fff; font-size: 0.82rem; font-weight: 700;">InventoryReservation</div>
+                                        <div style="color: #f472b6; font-size: 0.65rem; margin-top: 4px;">[Compensable]</div>
+                                    </div>
+                                    <div style="background: rgba(15, 23, 42, 0.8); border: 1px solid #0284c7; padding: 1rem 0.5rem; border-radius: 10px;">
+                                        <div style="color: var(--accent-cyan); font-size: 0.75rem; font-weight: 800;">STEP 03</div>
+                                        <div style="color: #fff; font-size: 0.82rem; font-weight: 700;">PaymentProcessing</div>
+                                        <div style="color: #f472b6; font-size: 0.65rem; margin-top: 4px;">[Compensable]</div>
+                                    </div>
+                                    <div style="background: rgba(15, 23, 42, 0.8); border: 1px solid #0284c7; padding: 1rem 0.5rem; border-radius: 10px;">
+                                        <div style="color: var(--accent-cyan); font-size: 0.75rem; font-weight: 800;">STEP 04</div>
+                                        <div style="color: #fff; font-size: 0.82rem; font-weight: 700;">ShipmentCreation</div>
+                                    </div>
+                                    <div style="background: rgba(15, 23, 42, 0.8); border: 1px solid #0284c7; padding: 1rem 0.5rem; border-radius: 10px;">
+                                        <div style="color: var(--accent-cyan); font-size: 0.75rem; font-weight: 800;">STEP 05</div>
+                                        <div style="color: #fff; font-size: 0.82rem; font-weight: 700;">FinalizeCheckout</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style="color: var(--text-muted); font-size: 1.2rem; margin-bottom: 0.5rem;">↓ Returns Output</div>
+                            <div style="background: #064e3b; color: #a7f3d0; border: 1px solid #047857; padding: 0.85rem 1.5rem; border-radius: 10px; font-weight: 700; display: inline-block;">
+                                ApiResponse&lt;CheckoutResponse&gt; (Standardized JSON)
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 07 — Workflow Steps -->
+            <section id="workflow-steps">
+                <div class="section-header">
+                    <span class="section-tag">Section 07 // Pipeline Anatomy</span>
+                    <h2 class="section-title">Workflow Steps Detailed Breakdown</h2>
+                    <p class="section-desc">شرح تفصيلي لكل Step في الـ Pipeline ومسؤوليتها المفردة وكيفية تنفيذ الـ Compensation الخاص بها.</p>
+                </div>
+
+                <div class="steps-container">
+                    <!-- Step 1 -->
+                    <div class="card step-card">
+                        <div class="step-num-badge">
+                            <span class="step-label">Step</span>
+                            <span class="step-digits">01</span>
+                        </div>
+                        <div>
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                                <h3 style="color: #fff; font-size: 1.25rem;"><span class="en-term">OrderValidationStep</span> (`IOrderValidationStep`)</h3>
+                                <span class="badge badge-blue">Validation Phase</span>
+                            </div>
+                            <p style="color: var(--text-secondary); font-size: 0.95rem; margin-bottom: 0.75rem;">
+                                بتتحقق من وجود الـ Order في الـ Database، وتتأكد إن حالته <span class="code-term">OrderStatus.Pending</span>، وإن قائمة الـ Items مش فاضية ومطابقة للشروط. لو الـ Order غير موجود أو في حالة تانية، بتوقف الـ Workflow فورًا وترمي <span class="code-term">NotFoundException</span> أو <span class="code-term">DomainException</span> بدون لمس أي Bounded Context تاني.
+                            </p>
+                            <div style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-muted);">
+                                <strong>Execution:</strong> <span style="color: #e2e8f0;">Task&lt;Order&gt; ExecuteAsync(Guid orderId, CancellationToken cancellationToken)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 2 -->
+                    <div class="card step-card">
+                        <div class="step-num-badge">
+                            <span class="step-label">Step</span>
+                            <span class="step-digits">02</span>
+                        </div>
+                        <div>
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                                <h3 style="color: #fff; font-size: 1.25rem;"><span class="en-term">InventoryReservationStep</span> (`IInventoryReservationStep`)</h3>
+                                <span class="badge badge-amber">Compensable Step</span>
+                            </div>
+                            <p style="color: var(--text-secondary); font-size: 0.95rem; margin-bottom: 0.75rem;">
+                                مسؤولة عن إرسال <span class="code-term">ReserveInventoryCommand</span> للـ Inventory Domain عشان تحجز وتنقص كميات المنتجات المطلوبة من الـ Stock. وفي حالة حدوث أي فشل لاحق في الـ Workflow، بتقدم ميثود <span class="code-term">CompensateAsync</span> عشان ترجع الـ Stock المحجوز فورًا لحالته الأصلية.
+                            </p>
+                            <div style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-muted);">
+                                <strong>Compensation:</strong> <span style="color: #f472b6;">Task CompensateAsync(Order order, ReserveInventoryResponse reservation, CancellationToken ct)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 3 -->
+                    <div class="card step-card">
+                        <div class="step-num-badge">
+                            <span class="step-label">Step</span>
+                            <span class="step-digits">03</span>
+                        </div>
+                        <div>
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                                <h3 style="color: #fff; font-size: 1.25rem;"><span class="en-term">PaymentProcessingStep</span> (`IPaymentProcessingStep`)</h3>
+                                <span class="badge badge-amber">Compensable Step</span>
+                            </div>
+                            <p style="color: var(--text-secondary); font-size: 0.95rem; margin-bottom: 0.75rem;">
+                                مسؤولة عن تنفيذ عملية الدفع عبر الـ Payment Gateway وتوليد <span class="code-term">TransactionId</span> وتسجيل الـ <span class="code-term">PaymentStatus.Paid</span>. ولو الـ Shipment فشل بعد نجاح الدفع، بتقدم ميثود <span class="code-term">CompensateAsync</span> بتعمل Refund للمبلغ وتسجل الـ <span class="code-term">PaymentStatus.Refunded</span>.
+                            </p>
+                            <div style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-muted);">
+                                <strong>Compensation:</strong> <span style="color: #f472b6;">Task CompensateAsync(Order order, ProcessPaymentResponse payment, CancellationToken ct)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 4 -->
+                    <div class="card step-card">
+                        <div class="step-num-badge">
+                            <span class="step-label">Step</span>
+                            <span class="step-digits">04</span>
+                        </div>
+                        <div>
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                                <h3 style="color: #fff; font-size: 1.25rem;"><span class="en-term">ShipmentCreationStep</span> (`IShipmentCreationStep`)</h3>
+                                <span class="badge badge-blue">Logistics Phase</span>
+                            </div>
+                            <p style="color: var(--text-secondary); font-size: 0.95rem; margin-bottom: 0.75rem;">
+                                بتتواصل مع شركة الشحن (Carrier) وتتأكد من صحة العنوان وبتصدر <span class="code-term">TrackingNumber</span> رسمي وتربط الـ Shipment بالـ Order.
+                            </p>
+                            <div style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-muted);">
+                                <strong>Execution:</strong> <span style="color: #e2e8f0;">Task&lt;CreateShipmentResponse&gt; ExecuteAsync(Order order, string address, string carrier, CancellationToken ct)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 5 -->
+                    <div class="card step-card">
+                        <div class="step-num-badge">
+                            <span class="step-label">Step</span>
+                            <span class="step-digits">05</span>
+                        </div>
+                        <div>
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                                <h3 style="color: #fff; font-size: 1.25rem;"><span class="en-term">FinalizeCheckoutStep</span> (`IFinalizeCheckoutStep`)</h3>
+                                <span class="badge badge-green">Completion Phase</span>
+                            </div>
+                            <p style="color: var(--text-secondary); font-size: 0.95rem; margin-bottom: 0.75rem;">
+                                بتحدث حالة الـ Order في الـ Database لـ <span class="code-term">OrderStatus.Confirmed</span> وتسجل الـ <span class="code-term">UpdatedAt</span> timestamp وتجمع كل النتائج من الـ Context وتبني الـ <span class="code-term">CheckoutResponse</span> النهائي للعميل.
+                            </p>
+                            <div style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-muted);">
+                                <strong>Execution:</strong> <span style="color: #e2e8f0;">Task&lt;CheckoutResponse&gt; ExecuteAsync(CheckoutWorkflowContext context, CancellationToken ct)</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 08 — Reverse Compensation -->
+            <section id="reverse-compensation">
+                <div class="section-header">
+                    <span class="section-tag">Section 08 // Resilience Strategy</span>
+                    <h2 class="section-title">Reverse Compensation (Saga-like Pattern)</h2>
+                    <p class="section-desc">كيف يتعامل الـ Orchestrator مع الفشل المفاجئ بدون ترك النظام في حالة غير متسقة (Inconsistent State).</p>
+                </div>
+
+                <div class="card" style="border-right: 4px solid var(--accent-purple);">
+                    <h3 class="card-title" style="color: var(--accent-purple); margin-bottom: 1rem;">Business-level Compensation vs. Database Rollback</h3>
+                    
+                    <p style="font-size: 1.05rem; line-height: 1.9; color: var(--text-main); margin-bottom: 1.5rem;">
+                        نقطة جوهرية لازم نفرق بينها كـ Software Architects: <strong>ده مش Database Transaction Rollback، دي Business-level Compensation</strong>.
+                    </p>
+
+                    <p style="color: var(--text-secondary); font-size: 0.98rem; margin-bottom: 1.5rem;">
+                        في الـ Distributed Workflows أو الـ Multi-step Operations، إحنا منقدرش نفتح SQL Transaction ونعلقها عبر شبكة الـ Payment Gateway أو الـ Shipping Carrier (لأن ده بيعمل Connection Pool Starvation و Deadlocks). لذلك، كل عملية بتتسجل في الـ Database أول بأول، وإذا حصل Failure في خطوة تالية، الـ Orchestrator بيقوم بتنفيذ <strong>Compensating Actions عكسية</strong> بالترتيب التنازلي للخطوات التي تمت بنجاح.
+                    </p>
+
+                    <!-- Scenario Illustration -->
+                    <div style="background: rgba(0, 0, 0, 0.4); border: 1px solid var(--border-color); border-radius: 14px; padding: 2rem; margin-bottom: 1.5rem;">
+                        <h4 style="color: #fff; font-size: 1rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                            <span style="color: var(--accent-amber);">⚡ Scenario:</span> فشل الشحن بعد نجاح حجز المخزن وخصم الدفع
+                        </h4>
+
+                        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; direction: ltr; font-family: var(--font-mono); font-size: 0.85rem;">
+                            <span style="background: rgba(16,185,129,0.15); color: #34d399; padding: 0.5rem 0.85rem; border-radius: 6px; border: 1px solid rgba(16,185,129,0.3);">1. Validation ✓</span>
+                            <span>→</span>
+                            <span style="background: rgba(16,185,129,0.15); color: #34d399; padding: 0.5rem 0.85rem; border-radius: 6px; border: 1px solid rgba(16,185,129,0.3);">2. Inventory Reserved ✓</span>
+                            <span>→</span>
+                            <span style="background: rgba(16,185,129,0.15); color: #34d399; padding: 0.5rem 0.85rem; border-radius: 6px; border: 1px solid rgba(16,185,129,0.3);">3. Payment Charged ✓</span>
+                            <span>→</span>
+                            <span style="background: rgba(244,63,94,0.15); color: #fb7185; padding: 0.5rem 0.85rem; border-radius: 6px; border: 1px solid rgba(244,63,94,0.3);">4. Shipment Failed ✗</span>
+                        </div>
+
+                        <div style="margin: 1.5rem 0; border-top: 1px dashed var(--border-color);"></div>
+
+                        <div style="color: var(--accent-rose); font-weight: 700; font-size: 0.95rem; margin-bottom: 0.75rem;">
+                            🔄 Automated Reverse Compensation Pipeline Triggered:
+                        </div>
+
+                        <div style="display: flex; flex-direction: column; gap: 0.5rem; font-family: var(--font-mono); font-size: 0.88rem; direction: ltr;">
+                            <div style="background: rgba(244,63,94,0.08); border-left: 3px solid var(--accent-rose); padding: 0.6rem 1rem; color: #fecdd3;">
+                                [Compensation Step 1] PaymentProcessingStep.CompensateAsync() ➔ Order.Payment.Status = Refunded
+                            </div>
+                            <div style="background: rgba(244,63,94,0.08); border-left: 3px solid var(--accent-rose); padding: 0.6rem 1rem; color: #fecdd3;">
+                                [Compensation Step 2] InventoryReservationStep.CompensateAsync() ➔ product.ReleaseStock(quantity)
+                            </div>
+                            <div style="background: rgba(244,63,94,0.08); border-left: 3px solid var(--accent-rose); padding: 0.6rem 1rem; color: #fecdd3;">
+                                [Compensation Step 3] Order.Status = Failed & CancellationReason = "Address rejected" ➔ SaveChangesAsync()
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 09 — Failure Scenarios Interactive Matrix -->
+            <section id="failure-scenarios">
+                <div class="section-header">
+                    <span class="section-tag">Section 09 // Failure Scenarios</span>
+                    <h2 class="section-title">Interactive Failure Scenarios Matrix</h2>
+                    <p class="section-desc">اضغط على أي سيناريو لرؤية سلوك الـ Orchestrator وتسلسل الـ Compensation بدقة.</p>
+                </div>
+
+                <div class="simulator-box">
+                    <div class="sim-btn-group">
+                        <button class="sim-btn active" onclick="showScenario('a')">Scenario A: Validation Failure</button>
+                        <button class="sim-btn" onclick="showScenario('b')">Scenario B: Out-of-Stock Failure</button>
+                        <button class="sim-btn" onclick="showScenario('c')">Scenario C: Payment Declined (Card 0000)</button>
+                        <button class="sim-btn" onclick="showScenario('d')">Scenario D: Carrier Address Error</button>
+                    </div>
+
+                    <div id="sim-output" class="sim-output-container">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 10 — CheckoutWorkflowContext -->
+            <section id="workflow-context">
+                <div class="section-header">
+                    <span class="section-tag">Section 10 // State Container</span>
+                    <h2 class="section-title">CheckoutWorkflowContext: Shared Runtime State</h2>
+                    <p class="section-desc">لماذا تم إدخال الـ Context وكيف يقضي على الـ Temporal State Pollution بين الـ Steps.</p>
+                </div>
+
+                <div class="card">
+                    <p style="font-size: 1.05rem; line-height: 1.9; color: var(--text-main); margin-bottom: 1.5rem;">
+                        الـ <span class="code-term">CheckoutWorkflowContext</span> بيوفر <span class="en-term">Strongly Typed Runtime State</span> بيتنقل بين الـ Steps في الـ Pipeline بدل ما كل Step تعتمد على Variables مبعثرة أو Scope غير آمن.
+                    </p>
+
+                    <div class="code-box">
+                        <div class="code-header">
+                            <span>CheckoutWorkflowContext.cs</span>
+                            <span>C# 13 / .NET 9</span>
+                        </div>
+                        <pre class="code-content"><code>public class CheckoutWorkflowContext
+{
+    public CheckoutCommand Command { get; }
+    public Guid OrderId => Command.OrderId;
+    public PaymentMethod PaymentMethod => Command.PaymentMethod;
+    public string? CardNumber => Command.CardNumber;
+    public string ShippingAddress => Command.ShippingAddress;
+    public string Carrier => Command.Carrier;
+
+    public Order Order { get; set; } = null!;
+    public ReserveInventoryResponse? InventoryReservation { get; set; }
+    public ProcessPaymentResponse? PaymentResult { get; set; }
+    public CreateShipmentResponse? ShipmentResult { get; set; }
+    public CheckoutResponse? Result { get; set; }
+
+    public bool IsInventoryReserved => InventoryReservation != null && InventoryReservation.Success;
+    public bool IsPaymentProcessed => PaymentResult != null && PaymentResult.Status == PaymentStatus.Paid;
+    public bool IsShipmentCreated => ShipmentResult != null && ShipmentResult.Status == ShipmentStatus.Created;
+}</code></pre>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 11 — Thin Command Handler -->
+            <section id="thin-handler">
+                <div class="section-header">
+                    <span class="section-tag">Section 11 // Handler Simplification</span>
+                    <h2 class="section-title">Thin Command Handler: Single Responsibility</h2>
+                    <p class="section-desc">مقارنة حجم الكود ومسؤوليته بعد تحويله لمفوض بسيط (Thin Delegator).</p>
+                </div>
+
+                <div class="card">
+                    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1.5rem; margin-bottom: 2rem;">
+                        <div>
+                            <h3 class="card-title" style="color: var(--accent-cyan); font-size: 1.4rem;">Approx. 92% Reduction in Handler Size</h3>
+                            <span style="color: var(--text-secondary); font-size: 0.95rem;">من 180+ سطر معقد إلى ~15 سطر فائق الوضوح (180 → 15 lines).</span>
+                        </div>
+                        <span class="badge badge-green" style="font-size: 0.9rem; padding: 0.5rem 1rem;">Single Responsibility Pattern</span>
+                    </div>
+
+                    <p style="color: var(--text-main); font-size: 1.05rem; line-height: 1.9; margin-bottom: 1.5rem;">
+                        الـ <span class="code-term">CheckoutCommandHandler</span> دلوقتي مبقاش بيعرف أي تفاصيل داخلية عن المخزن أو الدفع أو الشحن. مسؤوليته الوحيدة أصبحت استلام الـ Command وتمريره للـ <span class="code-term">ICheckoutOrchestrator</span>.
+                    </p>
+
+                    <div class="code-box">
+                        <div class="code-header">
+                            <span>CheckoutCommandHandler.cs (AFTER MIGRATION)</span>
+                            <span>~15 Lines of Clean Code</span>
+                        </div>
+                        <pre class="code-content"><code>public class CheckoutCommandHandler : IRequestHandler&lt;CheckoutCommand, CheckoutResponse&gt;
+{
+    private readonly ICheckoutOrchestrator _orchestrator;
+
+    public CheckoutCommandHandler(ICheckoutOrchestrator orchestrator)
+    {
+        _orchestrator = orchestrator;
+    }
+
+    public Task&lt;CheckoutResponse&gt; Handle(CheckoutCommand request, CancellationToken cancellationToken)
+    {
+        return _orchestrator.CheckoutAsync(request, cancellationToken);
+    }
+}</code></pre>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 12 — Testing & Verification Dashboard -->
+            <section id="testing">
+                <div class="section-header">
+                    <span class="section-tag">Section 12 // Quality Assurance</span>
+                    <h2 class="section-title">Testing & Verification Dashboard</h2>
+                    <p class="section-desc">مؤشرات الجودة والتحقق الأوتوماتيكي عبر كامل الـ Test Suite.</p>
+                </div>
+
+                <div class="card" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, var(--bg-card) 100%);">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+                        <div class="metric-box">
+                            <div class="metric-value" style="color: #fff;">46</div>
+                            <div class="metric-label">Total Test Cases</div>
+                        </div>
+                        <div class="metric-box">
+                            <div class="metric-value" style="color: var(--accent-emerald);">46</div>
+                            <div class="metric-label">Tests Passed</div>
+                        </div>
+                        <div class="metric-box">
+                            <div class="metric-value" style="color: var(--accent-cyan);">0</div>
+                            <div class="metric-label">Tests Failed</div>
+                        </div>
+                        <div class="metric-box">
+                            <div class="metric-value" style="color: var(--accent-emerald);">100%</div>
+                            <div class="metric-label">Success Rate</div>
+                        </div>
+                        <div class="metric-box">
+                            <div class="metric-value" style="color: var(--accent-purple);">~0.7s</div>
+                            <div class="metric-label">Total Execution Time</div>
+                        </div>
+                    </div>
+
+                    <div style="background: rgba(0, 0, 0, 0.5); padding: 1.25rem 1.5rem; border-radius: 10px; border: 1px solid var(--border-color); font-family: var(--font-mono); font-size: 0.9rem; color: #a7f3d0; direction: ltr;">
+                        $ dotnet test --logger "console;verbosity=detailed"<br>
+                        <span style="color: #34d399; font-weight: 700;">Passed! - Failed: 0, Passed: 46, Skipped: 0, Total: 46, Duration: 715 ms</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 13 — Test Coverage Map -->
+            <section id="coverage-map">
+                <div class="section-header">
+                    <span class="section-tag">Section 13 // Test Pyramid</span>
+                    <h2 class="section-title">Comprehensive Test Coverage Map</h2>
+                    <p class="section-desc">توزيع الاختبارات بين الـ Orchestrator Unit Tests، والـ Step Tests، والـ End-to-End Integration Tests.</p>
+                </div>
+
+                <div class="problems-grid">
+                    <div class="card" style="border-top: 3px solid var(--accent-purple);">
+                        <h4 style="color: var(--accent-purple); font-size: 1.15rem; margin-bottom: 1rem;">Orchestrator Unit Tests</h4>
+                        <ul style="list-style: none; display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.9rem; color: var(--text-secondary);">
+                            <li><span style="color: var(--accent-emerald);">✓</span> Happy Path: All steps succeed in exact order</li>
+                            <li><span style="color: var(--accent-emerald);">✓</span> Validation failure stops workflow immediately</li>
+                            <li><span style="color: var(--accent-emerald);">✓</span> Inventory failure skips payment & shipping</li>
+                            <li><span style="color: var(--accent-emerald);">✓</span> Payment failure triggers inventory compensation</li>
+                            <li><span style="color: var(--accent-emerald);">✓</span> Shipment failure triggers refund & stock release</li>
+                        </ul>
+                    </div>
+
+                    <div class="card" style="border-top: 3px solid var(--accent-cyan);">
+                        <h4 style="color: var(--accent-cyan); font-size: 1.15rem; margin-bottom: 1rem;">Step Isolated Unit Tests</h4>
+                        <ul style="list-style: none; display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.9rem; color: var(--text-secondary);">
+                            <li><span style="color: var(--accent-emerald);">✓</span> <span class="code-term">OrderValidationStepTests</span></li>
+                            <li><span style="color: var(--accent-emerald);">✓</span> <span class="code-term">InventoryReservationStepTests</span></li>
+                            <li><span style="color: var(--accent-emerald);">✓</span> <span class="code-term">PaymentProcessingStepTests</span></li>
+                            <li><span style="color: var(--accent-emerald);">✓</span> <span class="code-term">ShipmentCreationStepTests</span></li>
+                            <li><span style="color: var(--accent-emerald);">✓</span> <span class="code-term">FinalizeCheckoutStepTests</span></li>
+                        </ul>
+                    </div>
+
+                    <div class="card" style="border-top: 3px solid var(--accent-emerald);">
+                        <h4 style="color: var(--accent-emerald); font-size: 1.15rem; margin-bottom: 1rem;">Integration & API Tests</h4>
+                        <ul style="list-style: none; display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.9rem; color: var(--text-secondary);">
+                            <li><span style="color: var(--accent-emerald);">✓</span> <span class="code-term">CheckoutFlowIntegrationTests</span> (E2E)</li>
+                            <li><span style="color: var(--accent-emerald);">✓</span> <span class="code-term">OrdersApiIntegrationTests</span></li>
+                            <li><span style="color: var(--accent-emerald);">✓</span> <span class="code-term">InventoryApiIntegrationTests</span></li>
+                            <li><span style="color: var(--accent-emerald);">✓</span> <span class="code-term">PaymentsApiIntegrationTests</span></li>
+                            <li><span style="color: var(--accent-emerald);">✓</span> <span class="code-term">ShippingApiIntegrationTests</span></li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 14 — What Stayed Unchanged -->
+            <section id="unchanged">
+                <div class="section-header">
+                    <span class="section-tag">Section 14 // Architecture Stability</span>
+                    <h2 class="section-title">What Stayed Unchanged (Zero Regressions)</h2>
+                    <p class="section-desc">التأكيد على أن الـ Migration كانت إعادة تنظيم معماري دقيقة بدون إعادة كتابة عشوائية للنظام.</p>
+                </div>
+
+                <div class="card">
+                    <p style="font-size: 1.05rem; line-height: 1.9; color: var(--text-main); margin-bottom: 1.5rem;">
+                        الهدف من الـ Migration كان حل مشكلة الـ Orchestration فقط، مع الحفاظ الكامل على كافة البنى والـ Contracts القائمة:
+                    </p>
+
+                    <div class="checklist-grid">
+                        <div class="checklist-item"><span class="check-icon">✓</span> ASP.NET Core 9.0 Web API Setup</div>
+                        <div class="checklist-item"><span class="check-icon">✓</span> Vertical Slice Architecture Structure</div>
+                        <div class="checklist-item"><span class="check-icon">✓</span> CQRS Command & Query Separation</div>
+                        <div class="checklist-item"><span class="check-icon">✓</span> Domain Entities & Business Enums</div>
+                        <div class="checklist-item"><span class="check-icon">✓</span> SQL Server + EF Core Migrations</div>
+                        <div class="checklist-item"><span class="check-icon">✓</span> Existing REST API HTTP Contracts</div>
+                        <div class="checklist-item"><span class="check-icon">✓</span> Global Exception Handler & RFC 7807</div>
+                        <div class="checklist-item"><span class="check-icon">✓</span> Standardized ApiResponse&lt;T&gt; Format</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 15 — Git Branch Strategy & Commits -->
+            <section id="git-strategy">
+                <div class="section-header">
+                    <span class="section-tag">Section 15 // Git Version Control</span>
+                    <h2 class="section-title">Git Branch Strategy & Clean Commit History</h2>
+                    <p class="section-desc">سجل الـ Git المنظم الذي يوثق مراحل الترحيل خطوة بخطوة للمراجعة الأكاديمية والهندسية.</p>
+                </div>
+
+                <div class="card">
+                    <div class="git-timeline">
+                        <div class="timeline-node">
+                            <div class="timeline-dot" style="background: var(--accent-rose);"></div>
+                            <div class="timeline-content">
+                                <div style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--accent-rose); font-weight: 700; margin-bottom: 0.35rem;">BRANCH: before-orchestrator-pattern</div>
+                                <div style="color: #fff; font-weight: 700; font-size: 1.05rem;">feat: baseline CQRS with Vertical Slice Architecture without Orchestrator Pattern</div>
+                                <div style="color: var(--text-secondary); font-size: 0.88rem; margin-top: 0.25rem;">تم إنشاء الـ Baseline بالـ Monolithic Command Handler لإظهار المشكلة والتحديات المعمارية.</div>
+                            </div>
+                        </div>
+
+                        <div class="timeline-node">
+                            <div class="timeline-dot"></div>
+                            <div class="timeline-content">
+                                <div style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--accent-cyan); font-weight: 700; margin-bottom: 0.35rem;">COMMIT // a21de92</div>
+                                <div style="color: #fff; font-weight: 700; font-size: 1.05rem;">feat: introduce checkout orchestrator and thin command handler with focused steps</div>
+                                <div style="color: var(--text-secondary); font-size: 0.88rem; margin-top: 0.25rem;">إنشاء الـ Orchestrator، والـ Context، واستخراج الـ 5 Steps المستقلة، وتبسيط الـ Handler.</div>
+                            </div>
+                        </div>
+
+                        <div class="timeline-node">
+                            <div class="timeline-dot"></div>
+                            <div class="timeline-content">
+                                <div style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--accent-cyan); font-weight: 700; margin-bottom: 0.35rem;">COMMIT // bd5f131</div>
+                                <div style="color: #fff; font-weight: 700; font-size: 1.05rem;">test: add comprehensive orchestrator and step unit tests</div>
+                                <div style="color: var(--text-secondary); font-size: 0.88rem; margin-top: 0.25rem;">إضافة 10 Unit Tests مخصصة للـ Orchestrator والـ Steps وتحديث كامل الـ Test Suite لـ 46 اختبار.</div>
+                            </div>
+                        </div>
+
+                        <div class="timeline-node" style="margin-bottom: 0;">
+                            <div class="timeline-dot" style="background: var(--accent-emerald);"></div>
+                            <div class="timeline-content">
+                                <div style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--accent-emerald); font-weight: 700; margin-bottom: 0.35rem;">COMMIT // 4a00a45</div>
+                                <div style="color: #fff; font-weight: 700; font-size: 1.05rem;">docs: update documentation with orchestrator pattern architecture and diagrams</div>
+                                <div style="color: var(--text-secondary); font-size: 0.88rem; margin-top: 0.25rem;">تحديث الـ README.md بمخططات Mermaid ومقارنات تفصيلية بين الـ Before والـ After.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 16 — Engineering Impact -->
+            <section id="engineering-impact">
+                <div class="section-header">
+                    <span class="section-tag">Section 16 // Value Assessment</span>
+                    <h2 class="section-title">Engineering Impact & Architectural Value</h2>
+                    <p class="section-desc">تقييم هندسي دقيق للمكاسب المعمارية الناتجة عن الـ Migration.</p>
+                </div>
+
+                <div class="problems-grid">
+                    <div class="card" style="border-right: 4px solid var(--accent-cyan);">
+                        <h4 style="color: #fff; font-size: 1.15rem; margin-bottom: 0.5rem;">Separation of Concerns (SoC)</h4>
+                        <p style="color: var(--text-secondary); font-size: 0.95rem;">فصل تام بين استقبال الـ Command، وتنسيق الـ Workflow، وتنفيذ خطوات الـ Domains المختلفة.</p>
+                    </div>
+                    <div class="card" style="border-right: 4px solid var(--accent-indigo);">
+                        <h4 style="color: #fff; font-size: 1.15rem; margin-bottom: 0.5rem;">Maintainability & Velocity</h4>
+                        <p style="color: var(--text-secondary); font-size: 0.95rem;">سهولة قراءة وتعديل أي Step في الـ Workflow بدون الخوف من كسر باقي الخطوات أو الـ Compensation.</p>
+                    </div>
+                    <div class="card" style="border-right: 4px solid var(--accent-emerald);">
+                        <h4 style="color: #fff; font-size: 1.15rem; margin-bottom: 0.5rem;">Deterministic Failure Recovery</h4>
+                        <p style="color: var(--text-secondary); font-size: 0.95rem;">سلوك تعويض وفشل واضح وموثوق (Deterministic Reverse Compensation) بدلاً من معالجات الـ Rollback المرتجلة.</p>
+                    </div>
+                    <div class="card" style="border-right: 4px solid var(--accent-purple);">
+                        <h4 style="color: #fff; font-size: 1.15rem; margin-bottom: 0.5rem;">High Test Isolation</h4>
+                        <p style="color: var(--text-secondary); font-size: 0.95rem;">إمكانية اختبار سيناريوهات الفشل المعقدة عبر Pure Unit Tests بسرعة فائقة وبدون الحاجة لـ Databases.</p>
+                    </div>
+                </div>
+
+                <div style="margin-top: 1.5rem; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem 1.5rem;">
+                    <p style="font-size: 0.95rem; color: var(--text-secondary); margin: 0;">
+                        <strong style="color: var(--accent-cyan);">تنويه معماري مهم:</strong> هذه الـ Migration هي تحسين في الـ <span class="en-term">Architecture, Maintainability, and Testability</span>، وليست بالضرورة تسريعًا في الـ Runtime Performance، لأن الـ Operations الفيزيائية (Database Queries, Network I/O) لم تتغير.
+                    </p>
+                </div>
+            </section>
+
+            <!-- SECTION 17 — Developer Experience (Before vs After) -->
+            <section id="devex">
+                <div class="section-header">
+                    <span class="section-tag">Section 17 // Developer Experience</span>
+                    <h2 class="section-title">Before vs. After Developer Experience</h2>
+                    <p class="section-desc">كيف تغيرت تجربة المطور اليومية عند صيانة أو تعديل الـ Checkout Workflow.</p>
+                </div>
+
+                <div class="devex-grid">
+                    <!-- Scenario 1 -->
+                    <div class="devex-card" style="border-top: 3px solid var(--accent-rose);">
+                        <div class="devex-question">
+                            <span style="color: var(--accent-rose);">❓</span> "فين الـ Payment Logic وطريقة التعامل مع الـ Gateway؟"
+                        </div>
+                        <div style="margin-bottom: 1rem;">
+                            <span class="badge badge-red">BEFORE</span>
+                            <p style="color: var(--text-secondary); font-size: 0.92rem; margin-top: 0.5rem;">
+                                افتح <span class="code-term">CheckoutCommandHandler.cs</span>، واقرأ في وسط 180+ سطر كود، وحاول تفصل بين الـ Validation والـ Payment والـ Shipping.
+                            </p>
+                        </div>
+                        <div>
+                            <span class="badge badge-green">AFTER</span>
+                            <p style="color: var(--text-main); font-size: 0.92rem; margin-top: 0.5rem; font-weight: 600;">
+                                افتح ملف <span class="code-term">PaymentProcessingStep.cs</span> مباشرة. كل الـ Logic والـ Compensation موجودين في ملف معزول ومركز.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Scenario 2 -->
+                    <div class="devex-card" style="border-top: 3px solid var(--accent-emerald);">
+                        <div class="devex-question">
+                            <span style="color: var(--accent-emerald);">❓</span> "عايزين نضيف خطوة Fraud Detection قبل الدفع؟"
+                        </div>
+                        <div style="margin-bottom: 1rem;">
+                            <span class="badge badge-red">BEFORE</span>
+                            <p style="color: var(--text-secondary); font-size: 0.92rem; margin-top: 0.5rem;">
+                                عدل في الـ Monolithic Handler، وزوّد try/catch جديد، وعدل في شروط الـ Rollback القديمة مع مخاطرة كسر الـ Checkout كله.
+                            </p>
+                        </div>
+                        <div>
+                            <span class="badge badge-green">AFTER</span>
+                            <p style="color: var(--text-main); font-size: 0.92rem; margin-top: 0.5rem; font-weight: 600;">
+                                أنشئ كلاس <span class="code-term">FraudCheckStep : IFraudCheckStep</span> وحطه في الـ Orchestrator Pipeline بدون لمس الـ Handler.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 18 — Architecture Decision Summary (ADR Style) -->
+            <section id="decision-summary">
+                <div class="section-header">
+                    <span class="section-tag">Section 18 // Architecture Decision Record</span>
+                    <h2 class="section-title">Architecture Decision Summary (ADR)</h2>
+                    <p class="section-desc">ملخص القرار المعماري النهائي بتنسيق الـ Architecture Decision Records الرسمي.</p>
+                </div>
+
+                <div class="card" style="background: linear-gradient(135deg, rgba(30, 27, 75, 0.5) 0%, var(--bg-card) 100%); border: 1px solid var(--accent-indigo);">
+                    <div style="margin-bottom: 1.5rem;">
+                        <span class="badge badge-blue">ADR-001 // ACCEPTED</span>
+                    </div>
+
+                    <h3 style="color: #fff; font-size: 1.35rem; margin-bottom: 1rem;">
+                        Decision: Adopt the Orchestrator Pattern for Multi-Step Checkout Workflows
+                    </h3>
+
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin-top: 1.5rem;">
+                        <div style="background: rgba(0,0,0,0.3); padding: 1.25rem; border-radius: 10px;">
+                            <h5 style="color: var(--accent-cyan); margin-bottom: 0.5rem;">Context & Drivers</h5>
+                            <p style="color: var(--text-secondary); font-size: 0.9rem;">
+                                تضخم مسؤوليات الـ Command Handler في العمليات المتتابعة عبر الـ Domains، وصعوبة معالجة الفشل اليدوي وإجراء الـ Unit Testing.
+                            </p>
+                        </div>
+
+                        <div style="background: rgba(0,0,0,0.3); padding: 1.25rem; border-radius: 10px;">
+                            <h5 style="color: var(--accent-emerald); margin-bottom: 0.5rem;">Chosen Solution</h5>
+                            <p style="color: var(--text-secondary); font-size: 0.9rem;">
+                                إدخال <span class="en-term">CheckoutOrchestrator</span> مع <span class="en-term">Focused Steps</span> وإلزام كل خطوة قابلة للتعويض بتوفير <span class="code-term">CompensateAsync</span>.
+                            </p>
+                        </div>
+
+                        <div style="background: rgba(0,0,0,0.3); padding: 1.25rem; border-radius: 10px;">
+                            <h5 style="color: var(--accent-purple); margin-bottom: 0.5rem;">Consequences & Trade-offs</h5>
+                            <p style="color: var(--text-secondary); font-size: 0.9rem;">
+                                زيادة بسيطة في عدد الملفات والـ Interfaces، في مقابل تحقيق أعلى درجات الـ Modularity، ووضوح الـ Workflow، وسهولة الـ Testing.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 19 — Final Summary -->
+            <section id="final-summary">
+                <div class="section-header">
+                    <span class="section-tag">Section 19 // Conclusion</span>
+                    <h2 class="section-title">Final Conclusion</h2>
+                    <p class="section-desc">الخلاصة المعمارية الشاملة لتقرير الترحيل.</p>
+                </div>
+
+                <div class="card" style="text-align: center; padding: 3rem 2rem;">
+                    <p style="font-size: 1.25rem; line-height: 2; color: #fff; max-width: 900px; margin: 0 auto 2rem auto;">
+                        الـ Migration دي مش مجرد تقسيم لملف <span class="code-term">CheckoutCommandHandler</span> لملفات أصغر، الفكرة الأساسية إننا نقلنا مسؤولية إدارة الـ Workflow نفسها إلى <span class="en-term">CheckoutOrchestrator</span> مخصص، وخليّنا كل Business Operation في <span class="en-term">Step</span> واضحة ومستقلة، مع <span class="en-term">Explicit Reverse Compensation</span> موثوقة عند حدوث أي Failure.
+                    </p>
+
+                    <div style="display: inline-flex; align-items: center; justify-content: center; gap: 2rem; flex-wrap: wrap; background: rgba(0, 0, 0, 0.4); padding: 1.5rem 2.5rem; border-radius: 16px; border: 1px solid var(--border-color); font-family: var(--font-mono); direction: ltr;">
+                        <div style="text-align: center;">
+                            <div style="color: var(--accent-rose); font-weight: 700;">BEFORE</div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">Monolithic Handler ➔ Manual Rollback</div>
+                        </div>
+                        <div style="color: var(--accent-cyan); font-size: 1.5rem;">➔</div>
+                        <div style="text-align: center;">
+                            <div style="color: var(--accent-emerald); font-weight: 700;">AFTER</div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">Thin Handler ➔ Orchestrator ➔ Steps + Compensation</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Footer -->
+            <footer>
+                <div style="font-family: var(--font-en); font-weight: 700; color: #fff; margin-bottom: 0.5rem;">
+                    E-Commerce Checkout Architecture Migration Report
+                </div>
+                <div>Designed & Authored by Senior .NET Software Architect & Engineer</div>
+                <div style="font-size: 0.8rem; margin-top: 0.5rem; color: var(--text-muted);">
+                    ASP.NET Core 9.0 • CQRS • Vertical Slice Architecture • Orchestrator Pattern
+                </div>
+            </footer>
+
+        </main>
+    </div>
+
+    <!-- Interactive Script -->
+    <script>
+        // Reading Progress Bar
+        window.addEventListener('scroll', () => {
+            const winScroll = document.body.scrollTop || document.documentElement.scrollTop;
+            const height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+            const scrolled = (winScroll / height) * 100;
+            document.getElementById('progress-bar').style.width = scrolled + '%';
+        });
+
+        // ScrollSpy for Sidebar Navigation
+        const sections = document.querySelectorAll('section');
+        const navItems = document.querySelectorAll('.sidebar .nav-item');
+
+        window.addEventListener('scroll', () => {
+            let current = '';
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop - 120;
+                if (pageYOffset >= sectionTop) {
+                    current = section.getAttribute('id');
+                }
+            });
+
+            navItems.forEach(item => {
+                item.classList.remove('active');
+                const link = item.querySelector('a');
+                if (link && link.getAttribute('href') === '#' + current) {
+                    item.classList.add('active');
+                }
+            });
+        });
+
+        // Interactive Failure Simulator
+        const scenarios = {
+            a: {
+                title: "Scenario A: Validation Failure (Order Not Found / Not Pending)",
+                steps: [
+                    { name: "1. OrderValidationStep", status: "FAILED", detail: "Throws NotFoundException / DomainException(ORDER_INVALID_STATE)" },
+                    { name: "2. InventoryReservationStep", status: "SKIPPED", detail: "Did not execute (no inventory touched)" },
+                    { name: "3. PaymentProcessingStep", status: "SKIPPED", detail: "Did not execute (no card charged)" },
+                    { name: "4. ShipmentCreationStep", status: "SKIPPED", detail: "Did not execute (no carrier booked)" },
+                    { name: "5. FinalizeCheckoutStep", status: "SKIPPED", detail: "Did not execute" }
+                ],
+                compensation: "None required. Workflow aborted immediately. Global Exception Handler returns HTTP 404 or 422.",
+                result: "Order status remains unchanged. Zero side effects."
+            },
+            b: {
+                title: "Scenario B: Out-of-Stock Failure (Product Quantity = 0)",
+                steps: [
+                    { name: "1. OrderValidationStep", status: "SUCCESS", detail: "Order verified as Pending with line items" },
+                    { name: "2. InventoryReservationStep", status: "FAILED", detail: "Throws DomainException(PRODUCT_OUT_OF_STOCK)" },
+                    { name: "3. PaymentProcessingStep", status: "SKIPPED", detail: "Did not execute" },
+                    { name: "4. ShipmentCreationStep", status: "SKIPPED", detail: "Did not execute" },
+                    { name: "5. FinalizeCheckoutStep", status: "SKIPPED", detail: "Did not execute" }
+                ],
+                compensation: "Orchestrator marks Order.Status = Failed & Order.CancellationReason = 'Product out of stock'.",
+                result: "HTTP 422 Unprocessable Entity returned with code 'PRODUCT_OUT_OF_STOCK'."
+            },
+            c: {
+                title: "Scenario C: Payment Declined (Card Ending in 0000 / 9999)",
+                steps: [
+                    { name: "1. OrderValidationStep", status: "SUCCESS", detail: "Order validated (Pending)" },
+                    { name: "2. InventoryReservationStep", status: "SUCCESS", detail: "Product stock decremented (Reserved: 2 items)" },
+                    { name: "3. PaymentProcessingStep", status: "FAILED", detail: "Payment Gateway returned Card Declined" },
+                    { name: "4. ShipmentCreationStep", status: "SKIPPED", detail: "Did not execute" },
+                    { name: "5. FinalizeCheckoutStep", status: "SKIPPED", detail: "Did not execute" }
+                ],
+                compensation: "1. InventoryReservationStep.CompensateAsync() ➔ Restores 2 items back to Product.StockQuantity.<br>2. Order.Status = Failed & Order.CancellationReason = 'Payment declined'.",
+                result: "Inventory restored to original stock. HTTP 422 returned with code 'PAYMENT_DECLINED'."
+            },
+            d: {
+                title: "Scenario D: Carrier Address Error (Address rejected by FedEx/DHL)",
+                steps: [
+                    { name: "1. OrderValidationStep", status: "SUCCESS", detail: "Order validated (Pending)" },
+                    { name: "2. InventoryReservationStep", status: "SUCCESS", detail: "Inventory reserved (Stock deducted)" },
+                    { name: "3. PaymentProcessingStep", status: "SUCCESS", detail: "Payment charged successfully (Status: Paid)" },
+                    { name: "4. ShipmentCreationStep", status: "FAILED", detail: "Carrier rejected address 'INVALID_ADDRESS'" },
+                    { name: "5. FinalizeCheckoutStep", status: "SKIPPED", detail: "Did not execute" }
+                ],
+                compensation: "1. PaymentProcessingStep.CompensateAsync() ➔ Order.Payment.Status = Refunded.<br>2. InventoryReservationStep.CompensateAsync() ➔ Restores all reserved line items.<br>3. Order.Status = Failed & Order.CancellationReason = 'Invalid shipping address'.",
+                result: "Payment refunded, stock released back to catalog, order marked Failed. HTTP 422 returned with 'INVALID_SHIPPING_ADDRESS'."
+            }
+        };
+
+        function showScenario(key) {
+            document.querySelectorAll('.sim-btn').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+
+            const sc = scenarios[key];
+            let html = `<div style="color: #fff; font-weight: 700; font-size: 1.05rem; margin-bottom: 1rem;">${sc.title}</div>`;
+            
+            html += `<div style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1.25rem;">`;
+            sc.steps.forEach(st => {
+                let badgeColor = st.status === 'SUCCESS' ? '#34d399' : (st.status === 'FAILED' ? '#fb7185' : '#94a3b8');
+                let badgeBg = st.status === 'SUCCESS' ? 'rgba(16,185,129,0.15)' : (st.status === 'FAILED' ? 'rgba(244,63,94,0.15)' : 'rgba(255,255,255,0.05)');
+                html += `
+                    <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.03); padding: 0.6rem 1rem; border-radius: 8px;">
+                        <span>${st.name}</span>
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <span style="font-size: 0.75rem; color: #94a3b8;">${st.detail}</span>
+                            <span style="background: ${badgeBg}; color: ${badgeColor}; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 700;">${st.status}</span>
+                        </div>
+                    </div>
+                `;
+            });
+            html += `</div>`;
+
+            html += `
+                <div style="background: rgba(244,63,94,0.08); border-left: 3px solid #f43f5e; padding: 0.85rem 1rem; border-radius: 6px; margin-bottom: 0.75rem;">
+                    <strong style="color: #f43f5e;">⚡ Reverse Compensation:</strong> <span style="color: #fecdd3;">${sc.compensation}</span>
+                </div>
+                <div style="background: rgba(56,189,248,0.08); border-left: 3px solid #38bdf8; padding: 0.85rem 1rem; border-radius: 6px;">
+                    <strong style="color: #38bdf8;">🎯 End Result:</strong> <span style="color: #bae6fd;">${sc.result}</span>
+                </div>
+            `;
+
+            document.getElementById('sim-output').innerHTML = html;
+        }
+
+        // Initialize default scenario
+        showScenario('a');
+    </script>
+</body>
+</html>
